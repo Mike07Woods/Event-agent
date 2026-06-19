@@ -8,14 +8,16 @@ import config from "./config.js";
 // ─── Search queries sent to Serper ──────────────────────────────────────────
 // Mix of Egypt-specific physical events and global online events
 const SEARCH_QUERIES = [
-  "SaaS events Egypt 2026",
-  "call center expo Egypt 2026",
-  "BPO conference Egypt 2026",
-  "business networking events Cairo 2026",
-  "hiring events Egypt 2026",
-  "online SaaS conference 2026",
-  "virtual BPO summit 2026",
-  "remote business networking 2026",
+  "upcoming SaaS events Egypt 2026",
+  "upcoming call center expo Egypt 2026",
+  "upcoming BPO conference Egypt 2026",
+  "upcoming business networking events Cairo 2026",
+  "upcoming hiring events Egypt 2026",
+  "upcoming online SaaS conference 2026",
+  "upcoming virtual BPO summit 2026",
+  "upcoming remote business networking 2026",
+  "upcoming Egypt tech conference 2026",
+  "upcoming Cairo business expo 2026",
 ];
 
 // ─── Run a single Serper search query ───────────────────────────────────────

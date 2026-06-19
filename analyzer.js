@@ -140,11 +140,40 @@ function build_capitalize_note(event, opportunity_type, topic) {
   return `Monitor registrations, attend virtually, and follow up with speakers/sponsors afterward.`;
 }
 
+// ─── Pre-filter: drop events that are irrelevant or already past ──────────────
+
+// Returns true if the event should be kept.
+function should_keep(event) {
+  const loc  = (event.location || "").toLowerCase();
+  const desc = (event.description || "").toLowerCase();
+  const name = (event.name || "").toLowerCase();
+  const text = `${name} ${desc}`;
+
+  // Keep Egypt / Cairo physical events
+  const is_egypt  = /egypt|cairo|giza|alexandria|sharm|hurghada/.test(loc);
+  // Keep online / virtual events
+  const is_online = /online|virtual|remote/.test(loc);
+  // Keep if description or name mentions Egypt or an online format
+  const mentions_egypt_or_online = /egypt|cairo|online|virtual|remote|webinar/.test(text);
+
+  if (!is_egypt && !is_online && !mentions_egypt_or_online) return false;
+
+  // Discard events with a specific date that has already passed
+  const parsed = parse_fuzzy_date(event.date);
+  if (parsed !== null && parsed < new Date()) return false;
+
+  return true;
+}
+
 // ─── Main export: analyze a list of raw events ───────────────────────────────
 export function analyze_events(raw_events) {
   console.log(`\n🧠 Analyzing ${raw_events.length} events...`);
 
-  return raw_events.map((event) => {
+  // Filter before scoring — removes irrelevant locations and past dates
+  const filtered = raw_events.filter(should_keep);
+  console.log(`   Filtered out ${raw_events.length - filtered.length} irrelevant/past events → ${filtered.length} remaining`);
+
+  return filtered.map((event) => {
     const relevance_result   = score_relevance(event);
     const proximity_score    = score_proximity(event);
     const location_score     = score_location(event);
