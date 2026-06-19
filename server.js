@@ -54,6 +54,19 @@ const server = http.createServer((req, res) => {
 
   fs.readFile(file_path, (err, data) => {
     if (err) {
+      // events.json not yet written (no scan has run) — return a safe empty state
+      if (err.code === "ENOENT" && file_path.endsWith("events.json")) {
+        const empty = JSON.stringify({
+          events: [],
+          lastScan: null,
+          nextScan: null,
+          summary: { total: 0, high: 0, medium: 0, low: 0 },
+        });
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(empty);
+        return;
+      }
+
       if (err.code === "ENOENT") {
         res.writeHead(404, { "Content-Type": "text/plain" });
         res.end(`Not found: ${req.url}`);
@@ -73,8 +86,13 @@ const server = http.createServer((req, res) => {
 });
 
 // ─── Start listening ─────────────────────────────────────────────────────────
-server.listen(PORT, "127.0.0.1", () => {
-  console.log(`\n🌐 Event Radar dashboard running at http://localhost:${PORT}`);
-  console.log(`   Serving files from: ${__dirname}`);
-  console.log(`   Press Ctrl+C to stop.\n`);
-});
+try {
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`\n🌐 Event Radar dashboard running at http://localhost:${PORT}`);
+    console.log(`   Serving files from: ${__dirname}`);
+    console.log(`   Press Ctrl+C to stop.\n`);
+  });
+} catch (err) {
+  console.error("Failed to start server:", err.message);
+  process.exit(1);
+}
