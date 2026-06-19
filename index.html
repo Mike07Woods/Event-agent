@@ -95,7 +95,7 @@
   async function load_events() {
     try {
       // Cache-busting query param so the browser always fetches the latest file
-      const res = await fetch(`http://localhost:3000/events.json?t=${Date.now()}`);
+      const res = await fetch(`/events.json?t=${Date.now()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
