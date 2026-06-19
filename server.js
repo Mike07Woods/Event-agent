@@ -8,6 +8,11 @@ import http from "http";
 import fs   from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { scrape_events }  from "./scraper.js";
+import { analyze_events } from "./analyzer.js";
+import { rank_events }    from "./ranker.js";
+import { build_report }   from "./reporter.js";
+import { send_whatsapp }  from "./notifier.js";
 
 const PORT = process.env.PORT || 8080;
 
@@ -38,10 +43,58 @@ function resolve_file(url_path) {
   return abs;
 }
 
+// ─── Pipeline runner (shared with /run-scan endpoint) ────────────────────────
+let scan_running = false;
+
+async function run_pipeline() {
+  const raw      = await scrape_events();
+  const analyzed = analyze_events(raw);
+  const ranked   = rank_events(analyzed);
+  const report   = build_report(ranked);
+
+  await fs.promises.writeFile(
+    path.join(__dirname, "events.json"),
+    JSON.stringify({ summary: report.summary, events: report.events }, null, 2),
+    "utf-8"
+  );
+
+  await send_whatsapp(report.whatsapp_message);
+  return report.summary;
+}
+
 // ─── Request handler ─────────────────────────────────────────────────────────
 const server = http.createServer((req, res) => {
   // Allow the dashboard to fetch from any origin (needed when opened via file://)
   res.setHeader("Access-Control-Allow-Origin", "*");
+
+  // POST /run-scan — trigger the full pipeline over HTTP
+  if (req.method === "POST" && req.url.split("?")[0] === "/run-scan") {
+    if (scan_running) {
+      res.writeHead(409, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Scan already in progress" }));
+      return;
+    }
+
+    scan_running = true;
+    console.log("\n🔁 /run-scan triggered via HTTP POST");
+
+    run_pipeline()
+      .then((summary) => {
+        console.log("✅ /run-scan complete:", summary);
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true, summary }));
+      })
+      .catch((err) => {
+        console.error("❌ /run-scan failed:", err.message);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: err.message }));
+      })
+      .finally(() => {
+        scan_running = false;
+      });
+
+    return;
+  }
 
   const file_path = resolve_file(req.url);
 
