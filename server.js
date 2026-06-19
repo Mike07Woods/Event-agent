@@ -1,3 +1,5 @@
+console.log('PORT env variable:', process.env.PORT);
+
 // server.js — Lightweight static file server using only Node.js built-ins.
 // Serves the dashboard (index.html, style.css) and events.json.
 // No npm packages required — run with: node server.js
@@ -7,7 +9,7 @@ import fs   from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 3000;
 
 // Resolve the directory this file lives in (ESM has no __dirname by default)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
