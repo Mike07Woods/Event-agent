@@ -260,17 +260,16 @@
     spinner.style.display = "inline-block";
 
     try {
-      // Try to hit a local API endpoint (only works if you wrap the agent in Express)
-      const res = await fetch("/api/scan", { method: "POST" });
+      const res  = await fetch("/run-scan", { method: "POST" });
+      const body = await res.json().catch(() => ({}));
       if (res.ok) {
         show_toast("✅ Scan complete! Refreshing…", "success");
         setTimeout(() => { load_events(); }, 2000);
       } else {
-        throw new Error("API not available");
+        throw new Error(body.error || `Server error (${res.status})`);
       }
-    } catch {
-      // Graceful fallback: instruct user to run manually
-      show_toast("⚡ Run: node scheduler.js --now  in your terminal", "error");
+    } catch (err) {
+      show_toast(`❌ ${err.message}`, "error");
     } finally {
       btn.disabled    = false;
       text.textContent = "▶ Run Scan Now";
