@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Event Radar</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- ─── HEADER ─────────────────────────────────────────────────────────────── -->
+<header class="header">
+  <div class="container">
+    <div class="header-inner">
+
+      <!-- Logo + title -->
+      <div class="logo">
+        <div class="logo-icon">🎯</div>
+        <div class="logo-text">
+          <h1>Event Radar</h1>
+          <p id="scan-date">Loading last scan…</p>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="header-actions">
+        <span class="scan-date" id="next-scan-label"></span>
+        <button class="btn btn-primary" id="run-scan-btn" onclick="trigger_scan()">
+          <span id="scan-btn-text">▶ Run Scan Now</span>
+          <span id="scan-spinner" class="spinner" style="display:none;"></span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+</header>
+
+<!-- ─── MAIN CONTENT ────────────────────────────────────────────────────────── -->
+<main class="container">
+
+  <!-- Summary bar -->
+  <div class="summary-bar" id="summary-bar">
+    <div class="stat-card stat-total">
+      <div class="stat-value" id="stat-total">–</div>
+      <div class="stat-label">Total Events</div>
+    </div>
+    <div class="stat-card stat-high">
+      <div class="stat-value" id="stat-high">–</div>
+      <div class="stat-label">High Priority</div>
+    </div>
+    <div class="stat-card stat-medium">
+      <div class="stat-value" id="stat-medium">–</div>
+      <div class="stat-label">Medium Priority</div>
+    </div>
+    <div class="stat-card stat-low">
+      <div class="stat-value" id="stat-low">–</div>
+      <div class="stat-label">Low Priority</div>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <span class="filter-label">Filter:</span>
+    <button class="filter-btn active"  onclick="set_filter('all')"    id="f-all">All</button>
+    <button class="filter-btn high"    onclick="set_filter('high')"   id="f-high">🔴 High</button>
+    <button class="filter-btn medium"  onclick="set_filter('medium')" id="f-medium">🟡 Medium</button>
+    <button class="filter-btn low"     onclick="set_filter('low')"    id="f-low">🟢 Low</button>
+    <button class="filter-btn"         onclick="set_filter('egypt')"  id="f-egypt">📍 Egypt Only</button>
+    <button class="filter-btn"         onclick="set_filter('online')" id="f-online">🌐 Online Only</button>
+    <button class="filter-btn"         onclick="set_filter('SaaS')"   id="f-saas">SaaS</button>
+    <button class="filter-btn"         onclick="set_filter('BPO')"    id="f-bpo">BPO</button>
+    <button class="filter-btn"         onclick="set_filter('Hiring')" id="f-hiring">Hiring</button>
+  </div>
+
+  <!-- Event cards grid -->
+  <div id="events-grid" class="events-grid"></div>
+
+</main>
+
+<!-- ─── FOOTER ──────────────────────────────────────────────────────────────── -->
+<footer>
+  <p>Next scheduled scan: <span id="footer-next-scan">–</span> &nbsp;·&nbsp; Event Radar runs every Monday at 08:00 Cairo time</p>
+</footer>
+
+<!-- ─── TOAST ───────────────────────────────────────────────────────────────── -->
+<div class="toast" id="toast"></div>
+
+<!-- ─── DASHBOARD SCRIPT ─────────────────────────────────────────────────────── -->
+<script>
+  // ── State ────────────────────────────────────────────────────────────────────
+  let all_events  = [];
+  let active_filter = "all";
+
+  // ── Load events.json produced by the agent pipeline ──────────────────────────
+  async function load_events() {
+    try {
+      // Cache-busting query param so the browser always fetches the latest file
+      const res = await fetch(`http://localhost:3000/events.json?t=${Date.now()}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      all_events = data.events || [];
+      render_summary(data.summary || {});
+      render_cards(all_events);
+      render_meta(data.summary || {});
+    } catch (err) {
+      // Show a helpful empty state when events.json doesn't exist yet
+      render_empty_state(
+        "No scan data yet",
+        "Run the agent with <code>node scheduler.js --now</code> to generate the first report."
+      );
+      console.warn("Could not load events.json:", err.message);
+    }
+  }
+
+  // ── Update summary stat cards ─────────────────────────────────────────────────
+  function render_summary(summary) {
+    document.getElementById("stat-total").textContent  = summary.total        ?? 0;
+    document.getElementById("stat-high").textContent   = summary.high_count   ?? 0;
+    document.getElementById("stat-medium").textContent = summary.medium_count ?? 0;
+    document.getElementById("stat-low").textContent    = summary.low_count    ?? 0;
+  }
+
+  // ── Update header + footer timestamps ────────────────────────────────────────
+  function render_meta(summary) {
+    if (summary.scanned_at) {
+      const d = new Date(summary.scanned_at);
+      document.getElementById("scan-date").textContent =
+        `Last scan: ${d.toLocaleString("en-EG", { dateStyle: "medium", timeStyle: "short" })}`;
+    }
+
+    const next_label = summary.next_scan || "–";
+    document.getElementById("next-scan-label").textContent = `Next scan: ${next_label}`;
+    document.getElementById("footer-next-scan").textContent = next_label;
+  }
+
+  // ── Filter logic ──────────────────────────────────────────────────────────────
+  function set_filter(filter) {
+    active_filter = filter;
+
+    // Update button active states
+    document.querySelectorAll(".filter-btn").forEach((btn) => btn.classList.remove("active"));
+    const target = document.getElementById(`f-${filter.toLowerCase()}`);
+    if (target) target.classList.add("active");
+
+    // Apply filter and re-render
+    const filtered = filter_events(all_events, filter);
+    render_cards(filtered);
+  }
+
+  function filter_events(events, filter) {
+    switch (filter) {
+      case "all":    return events;
+      case "high":   return events.filter((e) => e.priority === "High");
+      case "medium": return events.filter((e) => e.priority === "Medium");
+      case "low":    return events.filter((e) => e.priority === "Low");
+      case "egypt":  return events.filter((e) => /egypt|cairo/i.test(e.location));
+      case "online": return events.filter((e) => /online/i.test(e.location));
+      default:       return events.filter((e) => (e.topic || "").toLowerCase() === filter.toLowerCase());
+    }
+  }
+
+  // ── Build and inject event cards ──────────────────────────────────────────────
+  function render_cards(events) {
+    const grid = document.getElementById("events-grid");
+    grid.innerHTML = "";
+
+    if (events.length === 0) {
+      render_empty_state("No events match this filter", "Try a different category above.");
+      return;
+    }
+
+    events.forEach((event) => {
+      const card = document.createElement("div");
+      card.className = `event-card priority-${event.priority?.toLowerCase() ?? "low"}`;
+      card.innerHTML = build_card_html(event);
+      grid.appendChild(card);
+    });
+  }
+
+  function render_empty_state(title, message) {
+    const grid = document.getElementById("events-grid");
+    grid.innerHTML = `
+      <div class="state-box" style="grid-column: 1/-1;">
+        <div class="state-icon">📭</div>
+        <h3>${title}</h3>
+        <p>${message}</p>
+      </div>
+    `;
+  }
+
+  // ── Build a single card's inner HTML ─────────────────────────────────────────
+  function build_card_html(event) {
+    const priority   = event.priority || "Low";
+    const badge_cls  = `badge badge-${priority.toLowerCase()}`;
+    const loc_icon   = event.location === "Online" ? "🌐" : "📍";
+    const topic      = event.topic ? `<span class="badge badge-topic">${esc(event.topic)}</span>` : "";
+    const url        = event.url ? esc(event.url) : "#";
+    const score_lbl  = event.score ? `<span class="score-pill">Score ${event.score}/10</span>` : "";
+
+    return `
+      <div class="card-header">
+        <div class="event-name">${esc(event.name)}</div>
+        <span class="${badge_cls}">${priority}</span>
+      </div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        ${topic}
+        ${score_lbl}
+      </div>
+
+      <div class="card-meta">
+        <div class="meta-item">
+          <span class="icon">📅</span>
+          <span>${esc(event.date || "Date TBD")}</span>
+        </div>
+        <div class="meta-item">
+          <span class="icon">${loc_icon}</span>
+          <span>${esc(event.location || "Unknown")}</span>
+        </div>
+      </div>
+
+      <p class="card-description">${esc(event.description || "No description available.")}</p>
+
+      <div class="capitalize-note">
+        <span class="note-icon">💡</span>
+        <p>${esc(event.capitalize_note || "Attend and engage with key stakeholders.")}</p>
+      </div>
+
+      <div class="card-footer">
+        <span class="card-source">${esc(event.source || "")}</span>
+        <a class="card-link" href="${url}" target="_blank" rel="noopener noreferrer">
+          Visit Event ↗
+        </a>
+      </div>
+    `;
+  }
+
+  // ── HTML-escape helper (prevents XSS from scraped content) ───────────────────
+  function esc(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  // ── "Run Scan Now" button — calls the agent via a local API endpoint ──────────
+  // NOTE: This requires a small HTTP wrapper around the pipeline.
+  // If you are running the agent standalone (node scheduler.js --now),
+  // the button will show a prompt to run it manually.
+  async function trigger_scan() {
+    const btn    = document.getElementById("run-scan-btn");
+    const text   = document.getElementById("scan-btn-text");
+    const spinner = document.getElementById("scan-spinner");
+
+    btn.disabled    = true;
+    text.textContent = "Scanning…";
+    spinner.style.display = "inline-block";
+
+    try {
+      // Try to hit a local API endpoint (only works if you wrap the agent in Express)
+      const res = await fetch("/api/scan", { method: "POST" });
+      if (res.ok) {
+        show_toast("✅ Scan complete! Refreshing…", "success");
+        setTimeout(() => { load_events(); }, 2000);
+      } else {
+        throw new Error("API not available");
+      }
+    } catch {
+      // Graceful fallback: instruct user to run manually
+      show_toast("⚡ Run: node scheduler.js --now  in your terminal", "error");
+    } finally {
+      btn.disabled    = false;
+      text.textContent = "▶ Run Scan Now";
+      spinner.style.display = "none";
+    }
+  }
+
+  // ── Toast helper ─────────────────────────────────────────────────────────────
+  function show_toast(message, type = "success") {
+    const toast = document.getElementById("toast");
+    toast.textContent  = message;
+    toast.className    = `toast ${type} show`;
+    setTimeout(() => { toast.classList.remove("show"); }, 4000);
+  }
+
+  // ── Boot ──────────────────────────────────────────────────────────────────────
+  load_events();
+
+  // Auto-refresh every 5 minutes in case the agent writes a new events.json
+  setInterval(load_events, 5 * 60 * 1000);
+</script>
+
+</body>
+</html>

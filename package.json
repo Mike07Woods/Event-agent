@@ -1,0 +1,17 @@
+{
+  "name": "event-radar",
+  "version": "1.0.0",
+  "description": "Weekly event scraping agent for SaaS, BPO, call center, and networking events",
+  "type": "module",
+  "main": "scheduler.js",
+  "scripts": {
+    "start": "node server.js",
+    "scan":  "node scheduler.js --now"
+  },
+  "dependencies": {
+    "dotenv":     "^16.4.5",
+    "node-cron":  "^3.0.3",
+    "node-fetch": "^3.3.2",
+    "twilio":     "^5.3.4"
+  }
+}
