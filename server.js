@@ -7,7 +7,7 @@ import fs   from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 // Resolve the directory this file lives in (ESM has no __dirname by default)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
